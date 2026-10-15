@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: leetcode-postgres
+    environment:
+      POSTGRES_DB: leetcode_db
+      POSTGRES_USER: leetcode_user
+      POSTGRES_PASSWORD: leetcode_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - leetcode-network
+
+  # Redis for caching and job queue
+  redis:
+    image: redis:7-alpine
+    container_name: leetcode-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - leetcode-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: leetcode-backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://leetcode_user:leetcode_password@postgres:5432/leetcode_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-secret-key-change-in-production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - leetcode-network
+
+  # Code Execution Engine
+  execution-engine:
+    build:
+      context: ./execution-engine
+      dockerfile: Dockerfile
+    container_name: leetcode-execution-engine
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./execution-engine:/app
+      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+    privileged: true
+    networks:
+      - leetcode-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: leetcode-frontend
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - leetcode-network
+
+networks:
+  leetcode-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
