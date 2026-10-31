@@ -4,13 +4,17 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import ProblemsPage from './pages/ProblemsPage';
 import ProblemDetailPage from './pages/ProblemDetailPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import AdminProblemsPage from './pages/AdminProblemsPage';
+import ArenaPage from './pages/ArenaPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import SubmissionsPage from './pages/SubmissionsPage';
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <Routes>
@@ -18,6 +22,12 @@ function App() {
         <Route index element={<HomePage />} />
         <Route path="problems" element={<ProblemsPage />} />
         <Route path="problems/:slug" element={<ProblemDetailPage />} />
+        <Route path="leaderboard" element={<LeaderboardPage />} />
+        <Route path="arena" element={<ArenaPage />} />
+        <Route
+          path="admin/problems"
+          element={isAuthenticated && isAdmin ? <AdminProblemsPage /> : <Navigate to="/problems" />}
+        />
         <Route path="login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/problems" />} />
         <Route path="register" element={!isAuthenticated ? <RegisterPage /> : <Navigate to="/problems" />} />
         <Route

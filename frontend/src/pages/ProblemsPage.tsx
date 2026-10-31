@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/axios';
-import { Search, Filter } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 interface Problem {
   id: string;
@@ -156,7 +156,7 @@ export default function ProblemsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-gray-300">
-                    {problem.acceptance_rate.toFixed(1)}%
+                    {(parseFloat(problem.acceptance_rate as any) || 0).toFixed(1)}%
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">

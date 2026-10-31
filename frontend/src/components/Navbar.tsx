@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Code2, User, LogOut, Trophy } from 'lucide-react';
+import { Code2, User, LogOut, Trophy, ShieldCheck, Swords } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <nav className="bg-slate-800 border-b border-slate-700">
@@ -21,12 +22,38 @@ export default function Navbar() {
               >
                 Problems
               </Link>
+              <Link
+                to="/leaderboard"
+                className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5"
+              >
+                <Trophy className="h-4 w-4 text-yellow-500" />
+                Leaderboard
+              </Link>
+              <Link
+                to="/arena"
+                className="text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5 transition"
+              >
+                <Swords className="h-4 w-4 text-rose-400" />
+                <span>1v1 Arena</span>
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+                  LIVE
+                </span>
+              </Link>
               {isAuthenticated && (
                 <Link
                   to="/submissions"
                   className="text-gray-300 hover:bg-slate-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Submissions
+                </Link>
+              )}
+              {isAuthenticated && isAdmin && (
+                <Link
+                  to="/admin/problems"
+                  className="text-blue-400 hover:bg-slate-700 hover:text-blue-300 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5"
+                >
+                  <ShieldCheck className="h-4 w-4 text-blue-400" />
+                  Admin Panel
                 </Link>
               )}
             </div>

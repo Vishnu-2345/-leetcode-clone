@@ -43,10 +43,11 @@ export const register = async (req: Request, res: Response) => {
   const user = result.rows[0];
 
   // Generate token
+  // @ts-ignore
   const token = jwt.sign(
     { id: user.id, username: user.username, email: user.email, role: user.role },
-    config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
+    config.jwt.secret as string,
+    { expiresIn: config.jwt.expiresIn as string }
   );
 
   res.status(201).json({
@@ -81,10 +82,11 @@ export const login = async (req: Request, res: Response) => {
   }
 
   // Generate token
+  // @ts-ignore
   const token = jwt.sign(
     { id: user.id, username: user.username, email: user.email, role: user.role },
-    config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
+    config.jwt.secret as string,
+    { expiresIn: config.jwt.expiresIn as string }
   );
 
   // Remove password from response

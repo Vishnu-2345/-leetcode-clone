@@ -27,4 +27,10 @@ export const config = {
     maxExecutionTime: parseInt(process.env.MAX_EXECUTION_TIME || '5000', 10),
     maxMemoryMB: parseInt(process.env.MAX_MEMORY_MB || '256', 10),
   },
+
+  ai: {
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434',
+    ollamaModel: process.env.OLLAMA_MODEL || 'codellama',
+  },
 };

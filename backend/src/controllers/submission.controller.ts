@@ -1,15 +1,93 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { pool } from '../database/connection';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth';
-import { submissionQueue } from '../services/submission.service';
+import { submissionQueue, runQueue } from '../services/submission.service';
+import { redisClient } from '../cache/redis';
 
 const submitCodeSchema = z.object({
   problemId: z.string().uuid(),
   code: z.string(),
   language: z.enum(['javascript', 'python', 'java', 'cpp']),
 });
+
+const runCodeSchema = z.object({
+  problemId: z.string().uuid(),
+  code: z.string(),
+  language: z.enum(['javascript', 'python', 'java', 'cpp']),
+  customTestCases: z.array(z.object({
+    input: z.string(),
+    expected_output: z.string().optional(),
+  })).optional(),
+});
+
+// Run Code against sample / custom test cases (does not record official user stats)
+export const runCode = async (req: Request, res: Response) => {
+  const { problemId, code, language, customTestCases } = runCodeSchema.parse(req.body);
+
+  let testCasesToRun: Array<{ id?: string; input: string; expected_output: string }> = [];
+
+  if (customTestCases && customTestCases.length > 0) {
+    testCasesToRun = customTestCases.map((tc, idx) => ({
+      id: `custom-${idx}`,
+      input: tc.input,
+      expected_output: tc.expected_output || '',
+    }));
+  } else {
+    // Fetch non-hidden sample test cases from database
+    const tcResult = await pool.query(
+      `SELECT id, input, expected_output FROM test_cases
+       WHERE problem_id = $1 AND is_hidden = false
+       ORDER BY order_index LIMIT 5`,
+      [problemId]
+    );
+
+    if (tcResult.rows.length === 0) {
+      throw new AppError(404, 'No sample test cases available for this problem');
+    }
+
+    testCasesToRun = tcResult.rows;
+  }
+
+  const runId = crypto.randomUUID();
+
+  // Enqueue run job
+  await runQueue.add('execute-run', {
+    runId,
+    code,
+    language,
+    testCases: testCasesToRun,
+  });
+
+  res.status(202).json({
+    status: 'success',
+    data: {
+      runId,
+      message: 'Code run queued',
+    },
+  });
+};
+
+// Poll results of a Run Code execution
+export const getRunResult = async (req: Request, res: Response) => {
+  const { runId } = req.params;
+
+  const cached = await redisClient.get(`run:${runId}`);
+  if (!cached) {
+    return res.json({
+      status: 'pending',
+      data: null,
+    });
+  }
+
+  const parsed = JSON.parse(cached);
+  res.json({
+    status: 'success',
+    data: parsed,
+  });
+};
 
 export const submitCode = async (req: AuthRequest, res: Response) => {
   const { problemId, code, language } = submitCodeSchema.parse(req.body);
@@ -159,6 +237,79 @@ export const getProblemSubmissions = async (req: AuthRequest, res: Response) => 
     status: 'success',
     data: {
       submissions: result.rows,
+    },
+  });
+};
+
+const visualizeSchema = z.object({
+  code: z.string(),
+  language: z.string().default('python'),
+  input: z.string().default(''),
+});
+
+export const visualizeExecution = async (req: Request, res: Response) => {
+  const { code, language, input } = visualizeSchema.parse(req.body);
+  const traceId = crypto.randomUUID();
+
+  try {
+    const job = await runQueue.add('execute-visualize', {
+      traceId,
+      code,
+      language,
+      input,
+    });
+
+    const result = await Promise.race([
+      job.finished(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout waiting for visualizer')), 10000)
+      ),
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        traceId,
+        ...(result as any),
+      },
+    });
+  } catch (err: any) {
+    const cached = await redisClient.get(`trace:${traceId}`);
+    if (cached) {
+      return res.json({
+        status: 'success',
+        data: {
+          traceId,
+          ...JSON.parse(cached),
+        },
+      });
+    }
+
+    res.status(202).json({
+      status: 'pending',
+      data: {
+        traceId,
+        message: 'Visualizer job queued',
+      },
+    });
+  }
+};
+
+export const getVisualizeResult = async (req: Request, res: Response) => {
+  const { traceId } = req.params;
+  const cached = await redisClient.get(`trace:${traceId}`);
+  if (!cached) {
+    return res.json({
+      status: 'pending',
+      data: null,
+    });
+  }
+
+  res.json({
+    status: 'success',
+    data: {
+      traceId,
+      ...JSON.parse(cached),
     },
   });
 };

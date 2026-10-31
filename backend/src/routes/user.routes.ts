@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/:userId/stats', authenticate, getUserStats);
 router.get('/leaderboard', getLeaderboard);
+router.get('/:userId/stats', authenticate, getUserStats);
 
 export default router;

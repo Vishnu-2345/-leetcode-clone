@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: leetcode_user
       POSTGRES_PASSWORD: leetcode_password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -40,11 +40,13 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: your-secret-key-change-in-production
       PORT: 3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
     ports:
       - "3000:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+    # volumes:
+    #   - ./backend:/app
+    #   - /app/node_modules
     depends_on:
       - postgres
       - redis
@@ -59,6 +61,7 @@ services:
     container_name: leetcode-execution-engine
     environment:
       NODE_ENV: development
+      DATABASE_URL: postgresql://leetcode_user:leetcode_password@postgres:5432/leetcode_db
       REDIS_URL: redis://redis:6379
       PORT: 3001
     ports:
@@ -68,6 +71,7 @@ services:
       - /app/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
+      - postgres
       - redis
     privileged: true
     networks:

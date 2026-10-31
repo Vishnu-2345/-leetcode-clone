@@ -13,10 +13,10 @@ export const submissionQueue = new Queue('submission-queue', config.redis.url, {
   },
 });
 
-// This will be processed by the execution engine
-submissionQueue.process('execute-submission', async (job) => {
-  // The execution engine will handle this
-  // This is just a placeholder
-  console.log('Submission job created:', job.id);
-  return { success: true };
+export const runQueue = new Queue('run-queue', config.redis.url, {
+  defaultJobOptions: {
+    attempts: 2,
+    removeOnComplete: true,
+    removeOnFail: true,
+  },
 });

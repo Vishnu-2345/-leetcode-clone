@@ -26,7 +26,7 @@ export const authenticate = async (
 
     const token = authHeader.substring(7);
 
-    const decoded = jwt.verify(token, config.jwt.secret) as any;
+    const decoded = jwt.verify(token, config.jwt.secret as string) as any;
 
     req.user = {
       id: decoded.id,
