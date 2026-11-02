@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { pool } from '../database/connection';
 import { logger } from '../utils/logger';
+import { GhostDuelistSession, activeGhostSessions, GhostDifficulty } from '../services/ghost.service';
 
 export interface DuelUser {
   id: string;
@@ -157,6 +158,75 @@ export function setupDuelSocket(io: Server) {
       socket.emit('arena:queue_status', { inQueue: false });
     });
 
+    // 2.5 Start Match vs Autonomous Ghost AI
+    socket.on('arena:join_ghost_duel', async ({ user, difficulty = 'Gladiator' }: { user: DuelUser; difficulty?: GhostDifficulty }) => {
+      const problem = await getRandomProblem();
+      if (!problem) {
+        socket.emit('arena:error', 'No problems available for duel');
+        return;
+      }
+
+      const roomId = `ghost_duel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const ghostSession = new GhostDuelistSession(roomId, problem, difficulty, io);
+      const botUser = ghostSession.getBotUser();
+      const ghostSocketId = ghostSession.getSocketId();
+
+      const duelRoom: DuelRoom = {
+        id: roomId,
+        problem,
+        players: {
+          [socket.id]: {
+            socketId: socket.id,
+            user,
+            progress: 0,
+            totalCases: problem.testCases?.length || 3,
+            status: 'coding',
+          },
+          [ghostSocketId]: {
+            socketId: ghostSocketId,
+            user: botUser,
+            progress: 0,
+            totalCases: problem.testCases?.length || 3,
+            status: 'coding',
+          },
+        },
+        status: 'in_progress',
+        startedAt: Date.now(),
+        durationSeconds: 900,
+      };
+
+      activeRooms.set(roomId, duelRoom);
+      activeGhostSessions.set(roomId, ghostSession);
+      socketToRoom.set(socket.id, roomId);
+      socket.join(roomId);
+
+      const matchPayload = {
+        roomId,
+        problem,
+        durationSeconds: 900,
+        players: Object.values(duelRoom.players),
+        isGhostDuel: true,
+      };
+
+      socket.emit('arena:match_found', matchPayload);
+
+      // Record in DB
+      try {
+        await pool.query(
+          `INSERT INTO duels (room_id, problem_id, player1_id, player2_id, status)
+           VALUES ($1, $2, $3, $4, 'in_progress')`,
+          [roomId, problem.id, user.id, botUser.id]
+        );
+      } catch (e) {
+        logger.warn('Failed to insert duel into DB:', e);
+      }
+
+      // Launch Ghost Autonomous Coding & Sandbox Loop
+      ghostSession.start().catch((err) => {
+        logger.error(`Error in Ghost session ${roomId}:`, err);
+      });
+    });
+
     // 3. Create Custom Room with Room Code
     socket.on('arena:create_custom_room', async (user: DuelUser) => {
       const problem = await getRandomProblem();
@@ -260,6 +330,13 @@ export function setupDuelSocket(io: Server) {
       const winnerPlayer = room.players[socket.id];
       if (!winnerPlayer) return;
 
+      // Abort active ghost session if human wins
+      const ghostSession = activeGhostSessions.get(roomId);
+      if (ghostSession) {
+        ghostSession.stop();
+        activeGhostSessions.delete(roomId);
+      }
+
       room.status = 'finished';
       room.winner = winnerPlayer.user.username;
 
@@ -309,6 +386,12 @@ export function setupDuelSocket(io: Server) {
       const room = activeRooms.get(roomId);
       if (!room || room.status !== 'in_progress') return;
 
+      const ghostSession = activeGhostSessions.get(roomId);
+      if (ghostSession) {
+        ghostSession.stop();
+        activeGhostSessions.delete(roomId);
+      }
+
       const forfeiter = room.players[socket.id];
       const winner = Object.values(room.players).find((p) => p.socketId !== socket.id);
 
@@ -348,6 +431,12 @@ export function setupDuelSocket(io: Server) {
 
       const roomId = socketToRoom.get(socket.id);
       if (roomId) {
+        const ghostSession = activeGhostSessions.get(roomId);
+        if (ghostSession) {
+          ghostSession.stop();
+          activeGhostSessions.delete(roomId);
+        }
+
         const room = activeRooms.get(roomId);
         if (room && room.status === 'in_progress') {
           const disconnectedPlayer = room.players[socket.id];

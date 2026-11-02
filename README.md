@@ -27,6 +27,14 @@
 - **Elo Rating & W/L Tracking:** Win matches to climb the global Elo leaderboard; ratings automatically calculate after every match.
 - **Confetti Victory Celebrations:** Interactive celebration modal with match statistics, execution runtime delta, and rematch options.
 
+### 2. 👻 Autonomous Ghost Duelist AI (Real Neural Opponent)
+- **Live Model Inference:** An autonomous agent that reads random problem constraints and writes real Python solutions via live LLM inference.
+- **Humanized Keystroke Emitter:** Types at realistic speeds (45–90 WPM) with natural thinking pauses at control flow statements.
+- **Real Docker Sandbox Testing:** Submits code to the isolated Linux container judge; opponent progress bars reflect genuine test pass rates.
+- **Self-Healing Debugging Loop:** Feeds compiler errors and failing test cases back into its context window, diagnosing and live-fixing bugs.
+- **Live Spy Monitor:** Switch to the *"Live Ghost Monitor"* tab during a duel to watch the Ghost's editor cursor move and code appear in real-time!
+- **3 Elo Tiers:** *Novice (1250 Elo)*, *Gladiator (1650 Elo)*, and *Grandmaster (2150 Elo)*.
+
 ### 2. 🔍 AlgoLens — Interactive Line-by-Line Code Visualizer
 - **Execution Stepper:** Step forward/backward through your code execution or press **Play** with adjustable speeds ($0.5\times$, $1\times$, $2\times$).
 - **Visual Array & Pointer Radar:** Automatically tracks integer pointers (`i`, `j`, `left`, `right`, `mid`) and renders animated pointers pointing directly to array elements as they move.

@@ -17,6 +17,9 @@ import {
   AlertTriangle,
   Zap,
   ArrowRight,
+  Bot,
+  Eye,
+  Sparkles,
 } from 'lucide-react';
 
 interface DuelPlayer {
@@ -81,12 +84,16 @@ export default function ArenaPage() {
   const [queueTimer, setQueueTimer] = useState(0);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  const [ghostDifficulty, setGhostDifficulty] = useState<'Novice' | 'Gladiator' | 'Grandmaster'>('Gladiator');
 
   // In-Match State
   const [activeMatch, setActiveMatch] = useState<DuelRoom | null>(null);
   const [matchSecondsRemaining, setMatchSecondsRemaining] = useState(900);
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState(defaultTemplates.python);
+  const [ghostCode, setGhostCode] = useState<string>('');
+  const [ghostDebugNotice, setGhostDebugNotice] = useState<string | null>(null);
+  const [leftTab, setLeftTab] = useState<'problem' | 'ghost_spy'>('problem');
 
   // Match Progress
   const [myProgress, setMyProgress] = useState({ passed: 0, total: 1 });
@@ -167,6 +174,15 @@ export default function ArenaPage() {
       });
     });
 
+    socket.on('arena:ghost_code_update', (data) => {
+      setGhostCode(data.code || '');
+    });
+
+    socket.on('arena:ghost_debug_notice', (data) => {
+      setGhostDebugNotice(data.message);
+      toast(data.message, { icon: '👻', duration: 4000 });
+    });
+
     socket.on('arena:match_ended', (data) => {
       const won = data.winner === user?.username;
       setMatchResult({
@@ -215,6 +231,8 @@ export default function ArenaPage() {
       socket.off('arena:match_found');
       socket.off('arena:opponent_progress');
       socket.off('arena:match_ended');
+      socket.off('arena:ghost_code_update');
+      socket.off('arena:ghost_debug_notice');
       socket.off('arena:opponent_disconnected');
       socket.off('arena:error');
     };
@@ -268,6 +286,23 @@ export default function ArenaPage() {
     socket.emit('arena:leave_queue');
     setInQueue(false);
     setQueueTimer(0);
+  };
+
+  const handleChallengeGhost = (diff: 'Novice' | 'Gladiator' | 'Grandmaster' = ghostDifficulty) => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to duel Ghost AI');
+      navigate('/login');
+      return;
+    }
+    setInQueue(false);
+    socket.emit('arena:join_ghost_duel', {
+      user: {
+        id: user?.id,
+        username: user?.username,
+        rating: userStatsData?.rating || 1200,
+      },
+      difficulty: diff,
+    });
   };
 
   const handleCreateCustomRoom = () => {
@@ -484,15 +519,26 @@ export default function ArenaPage() {
           <div className="flex items-center gap-3 w-1/3 justify-end">
             <div className="flex-1 text-right">
               <div className="flex items-center gap-2 justify-end">
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  1250 Elo
-                </span>
+                {opponentProgress.username.includes('Ghost') ? (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                    <Bot className="h-3 w-3 text-purple-400" />
+                    <span>Neural Bot</span>
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                    1250 Elo
+                  </span>
+                )}
                 <span className="font-bold text-white text-sm">{opponentProgress.username}</span>
               </div>
               {/* Opponent Progress Bar */}
               <div className="w-full bg-slate-800 rounded-full h-2.5 mt-1.5 overflow-hidden border border-slate-700 flex justify-end">
                 <div
-                  className="bg-gradient-to-r from-rose-500 to-orange-500 h-2.5 rounded-full transition-all duration-500"
+                  className={`h-2.5 rounded-full transition-all duration-500 ${
+                    opponentProgress.username.includes('Ghost')
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-500'
+                      : 'bg-gradient-to-r from-rose-500 to-orange-500'
+                  }`}
                   style={{ width: `${oppPct}%` }}
                 />
               </div>
@@ -501,27 +547,107 @@ export default function ArenaPage() {
                 <span>{opponentProgress.progress} / {opponentProgress.total} test cases</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-rose-600/30 border border-rose-500/40 flex items-center justify-center font-bold text-rose-400 text-lg shadow-inner">
-              {opponentProgress.username.charAt(0).toUpperCase()}
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-inner ${
+                opponentProgress.username.includes('Ghost')
+                  ? 'bg-purple-900/40 border border-purple-500/50 text-purple-300'
+                  : 'bg-rose-600/30 border border-rose-500/40 text-rose-400'
+              }`}
+            >
+              {opponentProgress.username.includes('Ghost') ? '👻' : opponentProgress.username.charAt(0).toUpperCase()}
             </div>
           </div>
         </div>
 
-        {/* ================= WORKSPACE (PROBLEM + MONACO EDITOR) ================= */}
+        {/* ================= WORKSPACE (PROBLEM / SPY + MONACO EDITOR) ================= */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left: Problem Statement & Examples */}
-          <div className="w-1/2 border-r border-slate-800 overflow-y-auto p-6 space-y-5">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-xl font-bold text-white">{activeMatch.problem.title}</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  {activeMatch.problem.difficulty}
+          {/* Left Panel: Tabs for Problem Statement or Live Ghost Spy Monitor */}
+          <div className="w-1/2 border-r border-slate-800 flex flex-col h-full overflow-hidden">
+            {/* Left Header Tabs */}
+            <div className="flex items-center justify-between px-6 py-2.5 bg-slate-900/80 border-b border-slate-800 flex-shrink-0">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setLeftTab('problem')}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition ${
+                    leftTab === 'problem'
+                      ? 'bg-slate-800 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Problem Description
+                </button>
+                <button
+                  onClick={() => setLeftTab('ghost_spy')}
+                  className={`px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1.5 ${
+                    leftTab === 'ghost_spy'
+                      ? 'bg-purple-950/80 text-purple-200 border border-purple-500/40 shadow'
+                      : 'text-purple-400/80 hover:text-purple-200'
+                  }`}
+                >
+                  <Eye className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Live Ghost Monitor</span>
+                  {ghostCode && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                </button>
+              </div>
+
+              {ghostDebugNotice && (
+                <span className="text-[10px] font-mono text-amber-400 animate-pulse">
+                  Self-Healing in progress...
                 </span>
-              </div>
-              <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                {activeMatch.problem.description}
-              </div>
+              )}
             </div>
+
+            {/* Left Body Content */}
+            {leftTab === 'ghost_spy' ? (
+              <div className="flex-1 flex flex-col bg-slate-950 p-4 space-y-3 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-purple-400" />
+                    <span className="text-xs font-bold text-white font-mono">{opponentProgress.username} Live Keystroke Stream</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Evaluation: {opponentProgress.progress} / {opponentProgress.total} Passed
+                  </span>
+                </div>
+
+                {ghostDebugNotice && (
+                  <div className="p-2.5 bg-amber-950/40 border border-amber-500/30 rounded-lg text-amber-300 text-xs flex items-center gap-2 font-mono">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                    <span>{ghostDebugNotice}</span>
+                  </div>
+                )}
+
+                <div className="flex-1 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
+                  <Editor
+                    height="100%"
+                    language="python"
+                    theme="vs-dark"
+                    value={ghostCode || '# Ghost AI is analyzing problem constraints and writing Python solution...'}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 12,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-xl font-bold text-white">{activeMatch.problem.title}</h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      {activeMatch.problem.difficulty}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    {activeMatch.problem.description}
+                  </div>
+                </div>
 
             {/* Examples */}
             {activeMatch.problem.examples && activeMatch.problem.examples.length > 0 && (
@@ -561,6 +687,8 @@ export default function ArenaPage() {
               </button>
             </div>
           </div>
+        )}
+      </div>
 
           {/* Right: Code Editor & Execution Controls */}
           <div className="w-1/2 flex flex-col bg-slate-950">
@@ -705,7 +833,7 @@ export default function ArenaPage() {
         </div>
 
         {/* Arena Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Card 1: Random Matchmaking */}
           <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-6">
             <div>
@@ -722,7 +850,7 @@ export default function ArenaPage() {
               </div>
               <h3 className="text-xl font-bold text-white mt-4">Ranked Quick Match</h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Automatically matches you against an opponent with a similar Elo rating on a random
+                Automatically matches you against a human opponent with a similar Elo rating on a random
                 algorithmic problem.
               </p>
             </div>
@@ -735,6 +863,17 @@ export default function ArenaPage() {
                     Finding worthy opponent... ({queueTimer}s)
                   </span>
                 </div>
+
+                {queueTimer >= 6 && (
+                  <button
+                    onClick={() => handleChallengeGhost('Gladiator')}
+                    className="w-full py-2 bg-purple-950/70 hover:bg-purple-900/70 border border-purple-500/40 text-purple-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow"
+                  >
+                    <Bot className="h-3.5 w-3.5 text-purple-400" />
+                    <span>Duel Ghost AI instead (Instant Match)</span>
+                  </button>
+                )}
+
                 <button
                   onClick={handleLeaveQueue}
                   className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition"
@@ -753,7 +892,65 @@ export default function ArenaPage() {
             )}
           </div>
 
-          {/* Card 2: Custom Friend Duels */}
+          {/* Card 2: Ghost AI Practice */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-purple-950/40 border border-purple-500/30 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-6">
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="p-3 bg-purple-600/20 text-purple-400 rounded-xl border border-purple-500/30">
+                  <Bot className="h-6 w-6" />
+                </div>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <Sparkles className="h-3 w-3 text-purple-400" />
+                  Neural Model
+                </span>
+              </div>
+              <h3 className="text-xl font-bold text-white mt-4 flex items-center gap-2">
+                <span>Ghost Duelist</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  AI
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Compete against an autonomous neural agent that writes code live, evaluates test cases in Docker, and debugs if tests fail.
+              </p>
+
+              {/* Difficulty Selector */}
+              <div className="mt-4 space-y-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Select Difficulty:
+                </span>
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-semibold">
+                  {(['Novice', 'Gladiator', 'Grandmaster'] as const).map((diff) => (
+                    <button
+                      key={diff}
+                      type="button"
+                      onClick={() => setGhostDifficulty(diff)}
+                      className={`py-1.5 rounded-md text-center transition ${
+                        ghostDifficulty === diff
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="text-[11px] leading-tight">{diff}</div>
+                      <div className="text-[9px] opacity-75 font-mono">
+                        {diff === 'Novice' ? '1250' : diff === 'Gladiator' ? '1650' : '2150'} Elo
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleChallengeGhost(ghostDifficulty)}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 group"
+            >
+              <span>Challenge Ghost AI</span>
+              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition" />
+            </button>
+          </div>
+
+          {/* Card 3: Custom Friend Duels */}
           <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-rose-950/30 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between space-y-6">
             <div>
               <div className="p-3 bg-rose-600/20 text-rose-400 rounded-xl border border-rose-500/30 w-fit">
