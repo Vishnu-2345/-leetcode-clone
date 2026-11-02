@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import Editor from '@monaco-editor/react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+import { getStarterCode } from '../lib/starterCode';
 import {
   Swords,
   Users,
@@ -51,29 +52,6 @@ interface DuelRoom {
   players: DuelPlayer[];
 }
 
-const defaultTemplates: Record<string, string> = {
-  python: `class Solution:
-    def solution(self, *args, **kwargs):
-        # Write your duel solution here
-        pass`,
-  javascript: `class Solution {
-  solution(...args) {
-    // Write your duel solution here
-  }
-}`,
-  java: `class Solution {
-    public Object solution(String input) {
-        return null;
-    }
-}`,
-  cpp: `#include <iostream>
-#include <string>
-
-std::string solution(std::string input) {
-    return "";
-}`,
-};
-
 export default function ArenaPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
@@ -90,7 +68,7 @@ export default function ArenaPage() {
   const [activeMatch, setActiveMatch] = useState<DuelRoom | null>(null);
   const [matchSecondsRemaining, setMatchSecondsRemaining] = useState(900);
   const [language, setLanguage] = useState('python');
-  const [code, setCode] = useState(defaultTemplates.python);
+  const [code, setCode] = useState('');
   const [ghostCode, setGhostCode] = useState<string>('');
   const [ghostDebugNotice, setGhostDebugNotice] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<'problem' | 'ghost_spy'>('problem');
@@ -150,7 +128,7 @@ export default function ArenaPage() {
       setCreatedRoomCode(null);
       setActiveMatch(data);
       setMatchSecondsRemaining(data.durationSeconds || 900);
-      setCode(defaultTemplates[language] || defaultTemplates.python);
+      setCode(getStarterCode(data.problem, language));
 
       const opponent = data.players.find((p) => p.user.id !== user?.id);
       if (opponent) {
@@ -697,8 +675,11 @@ export default function ArenaPage() {
               <select
                 value={language}
                 onChange={(e) => {
-                  setLanguage(e.target.value);
-                  setCode(defaultTemplates[e.target.value] || '');
+                  const newLang = e.target.value;
+                  setLanguage(newLang);
+                  if (activeMatch?.problem) {
+                    setCode(getStarterCode(activeMatch.problem, newLang));
+                  }
                 }}
                 className="bg-slate-800 border border-slate-700 text-slate-200 rounded px-2.5 py-1 text-xs focus:outline-none"
               >

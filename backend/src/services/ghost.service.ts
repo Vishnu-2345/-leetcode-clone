@@ -148,6 +148,10 @@ ${JSON.stringify(this.problem.examples || [])}`;
       userPrompt += `\n\nYour previous code failed test cases with this error:\n${failingErrorFeedback}\nAnalyze the error and return the complete, corrected Python 3 code.`;
     }
 
+    if (this.problem.starter_code) {
+      userPrompt += `\n\nYou MUST implement the solution strictly matching this exact LeetCode class and method signature:\n${this.problem.starter_code}`;
+    }
+
     // Attempt 1: Gemini REST API
     if (config.ai.geminiApiKey) {
       try {
@@ -430,7 +434,7 @@ ${JSON.stringify(this.problem.examples || [])}`;
 
     if (slug.includes('two-sum') || title.includes('two sum')) {
       return `class Solution:
-    def solution(self, nums, target):
+    def twoSum(self, nums: List[int], target: int) -> List[int]:
         seen = {}
         for i, num in enumerate(nums):
             diff = target - num
@@ -442,7 +446,7 @@ ${JSON.stringify(this.problem.examples || [])}`;
 
     if (slug.includes('palindrome') || title.includes('palindrome')) {
       return `class Solution:
-    def solution(self, s: str) -> bool:
+    def isPalindrome(self, s: str) -> bool:
         filtered = [c.lower() for c in s if c.isalnum()]
         left, right = 0, len(filtered) - 1
         while left < right:
@@ -457,7 +461,7 @@ ${JSON.stringify(this.problem.examples || [])}`;
       return `from collections import defaultdict
 
 class Solution:
-    def solution(self, strs):
+    def groupAnagrams(self, strs: List[str]) -> List[List[str]]:
         anagram_map = defaultdict(list)
         for s in strs:
             sorted_s = "".join(sorted(s))
@@ -468,29 +472,29 @@ class Solution:
 
     if (slug.includes('reverse') || title.includes('reverse')) {
       return `class Solution:
-    def solution(self, s):
-        if isinstance(s, list):
-            left, right = 0, len(s) - 1
-            while left < right:
-                s[left], s[right] = s[right], s[left]
-                left += 1
-                right -= 1
-            return s
-        return s[::-1]`;
+    def reverseString(self, s: List[str]) -> None:
+        left, right = 0, len(s) - 1
+        while left < right:
+            s[left], s[right] = s[right], s[left]
+            left += 1
+            right -= 1`;
     }
 
-    // Generic optimal heuristic fallback
+    // If starter_code exists, use its signature
+    if (this.problem.starter_code) {
+      let starter = this.problem.starter_code.trimEnd();
+      if (starter.endsWith(':')) {
+        starter += '\n        pass';
+      }
+      return starter;
+    }
+
     return `class Solution:
-    def solution(self, *args, **kwargs):
-        # Extract inputs from args or kwargs
-        if args:
-            val = args[0]
-            if isinstance(val, list):
-                return sorted(val)
-            return val
-        return None`;
+    def solve(self, nums):
+        return sorted(nums) if isinstance(nums, list) else nums`;
   }
 }
 
 // Active Ghost sessions mapped by roomId
 export const activeGhostSessions = new Map<string, GhostDuelistSession>();
+

@@ -44,7 +44,7 @@ const socketToRoom = new Map<string, string>();
 
 async function getRandomProblem() {
   const result = await pool.query(
-    `SELECT id, title, slug, description, difficulty, constraints, examples
+    `SELECT id, title, slug, description, difficulty, constraints, examples, starter_code, entry_point
      FROM problems
      ORDER BY RANDOM()
      LIMIT 1`

@@ -8,35 +8,7 @@ import toast from 'react-hot-toast';
 import { Play, Check, X, Clock, CheckCircle, XCircle, Code, Terminal, Sparkles, Eye } from 'lucide-react';
 import { AICoachPanel } from '../components/AICoachPanel';
 import { AlgoLensModal } from '../components/AlgoLensModal';
-
-const languageTemplates: Record<string, string> = {
-  javascript: `class Solution {
-  /**
-   * @param {...any} args
-   * @return {any}
-   */
-  solution(...args) {
-    // Your code here
-  }
-}`,
-  python: `class Solution:
-    def solution(self, *args, **kwargs):
-        # Your code here
-        pass`,
-  java: `class Solution {
-    public Object solution(String input) {
-        // Your code here
-        return null;
-    }
-}`,
-  cpp: `#include <iostream>
-#include <string>
-
-std::string solution(std::string input) {
-    // Your code here
-    return "";
-}`,
-};
+import { getStarterCode } from '../lib/starterCode';
 
 export default function ProblemDetailPage() {
   const { slug } = useParams();
@@ -45,7 +17,7 @@ export default function ProblemDetailPage() {
   const { isAuthenticated } = useAuthStore();
 
   const [language, setLanguage] = useState('python');
-  const [code, setCode] = useState(languageTemplates.python);
+  const [code, setCode] = useState('');
   const [activeTab, setActiveTab] = useState<'description' | 'submissions' | 'ai-coach'>('description');
 
   // Bottom Console Tabs
@@ -71,8 +43,11 @@ export default function ProblemDetailPage() {
 
   // Load starter code or custom input when problem loads
   useEffect(() => {
-    if (problemData?.testCases && problemData.testCases.length > 0) {
-      setCustomInput(problemData.testCases[0].input || '');
+    if (problemData) {
+      if (problemData.testCases && problemData.testCases.length > 0) {
+        setCustomInput(problemData.testCases[0].input || '');
+      }
+      setCode(getStarterCode(problemData, language));
     }
   }, [problemData]);
 
@@ -202,7 +177,7 @@ export default function ProblemDetailPage() {
 
   const handleLanguageChange = (newLanguage: string) => {
     setLanguage(newLanguage);
-    setCode(languageTemplates[newLanguage as keyof typeof languageTemplates] || '');
+    setCode(getStarterCode(problemData, newLanguage));
   };
 
   const handleRun = () => {
@@ -237,7 +212,7 @@ export default function ProblemDetailPage() {
       setBottomTab('result');
       if (sub.code) {
         setCode(sub.code);
-        if (sub.language && languageTemplates[sub.language]) {
+        if (sub.language) {
           setLanguage(sub.language);
         }
       }
